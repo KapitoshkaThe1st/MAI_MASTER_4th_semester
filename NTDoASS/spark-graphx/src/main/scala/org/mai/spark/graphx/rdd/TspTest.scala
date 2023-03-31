@@ -3,7 +3,6 @@ package org.mai.spark.graphx.rdd
 import org.apache.spark.graphx.{Edge, Graph, VertexId}
 import org.apache.spark.sql.SparkSession
 import org.log4s.getLogger
-import spire.math.UInt
 
 import scala.collection.mutable.ListBuffer
 import scala.io.Source
@@ -14,13 +13,14 @@ object TspTest {
   // private val filePath = "data/usa.tsp"
 
   private val topCount = 3
+  private val samples = 4
 
   private[this] val logger = getLogger
 
   def main(args: Array[String]): Unit = {
     setLoggerLevel
-//    testGraphXTSP()
-    testLocalTSP()
+    testGraphXTSP()
+//    testLocalTSP()
   }
 
   private def readData(filePath: String): List[(Long, (Double, Double))] = {
@@ -48,7 +48,8 @@ object TspTest {
 
     bufferedSource.close
 
-    lb.toList
+//    lb.toList
+    lb.zipWithIndex.filter(t => t._2 % 2 == 0).map(t => t._1).toList
   }
 
   private def euc2dDistance(x1 : Double, y1: Double, x2 : Double, y2: Double): Double = {
@@ -60,7 +61,7 @@ object TspTest {
 
   private def generateEdges(vertices: List[(Long, (Double, Double))]): List[LocalEdge] = {
     val lb = ListBuffer.empty[LocalEdge]
-    for(i <- vertices.indices; j <- i+1 until vertices.size) {
+    for(i <- vertices.indices; j <- i + 1 until vertices.size) {
       val v1 = vertices(i)
       val v2 = vertices(j)
 
@@ -97,37 +98,6 @@ object TspTest {
     graph
   }
 
-  private def invertEdge(edge: (VertexId, VertexId, Double)) = {
-    (edge._2, edge._1, edge._3)
-  }
-
-  private def restoreOrderFirstTwo(order: Array[(VertexId, VertexId, Double)]): Unit = {
-    if(order(0)._2 == order(1)._2) {
-      order(1) = invertEdge(order(1))
-    }
-    else if(order(0)._1 == order(1)._1) {
-      order(0) = invertEdge(order(0))
-    }
-    else if(order(0)._1 == order(1)._2) {
-      order(0) = invertEdge(order(0))
-      order(1) = invertEdge(order(1))
-    }
-  }
-
-  private def restoreOrder(order: Array[(VertexId, VertexId, Double)]): Unit = {
-
-    restoreOrderFirstTwo(order)
-
-    for( i <- 1 until order.length ) {
-      val prev = order(i - 1)
-      val cur = order(i)
-      if(prev._2 != cur._1) {
-        val newTup = (cur._2, cur._1, cur._3)
-        order(i) = newTup
-      }
-    }
-  }
-
   private def generateLocalGraph2(): (List[LocalVertex], List[LocalEdge]) = {
     val tempVertices = readData(filePath)
     val edges = generateEdges(tempVertices)
@@ -155,15 +125,12 @@ object TspTest {
 
     val algo = new TspSolver(topCount)
 
-    val order = algo.greedyLocal(1L, vertices, edges).map(e => (e.src, e.dst, e.weight)).toArray
-
-    restoreOrder(order)
+    val (order, weight) = algo.greedyLocal(vertices, edges, samples)
 
     println("traverse order:")
     order.foreach(println)
 
-    val totalWeight = order.map(_._3).sum
-    println(s"total weight: $totalWeight")
+    println(s"total weight: $weight")
   }
 
   private def testGraphXTSP(): Unit = {
@@ -172,23 +139,16 @@ object TspTest {
     val spark = createSparkSession(appName)
 
     val graph = generateGraph2(spark)
+//    val graph = generateGraph(spark)
       .mapEdges(_.attr)
 
     val algo = new TspSolver(topCount)
 
-    println("start at 1")
-
-    val g = algo.greedyGraphX(graph, 1L)
-    val order = g.triplets.filter(_.attr._2 >= 0).sortBy(_.attr._2).map(et => (et.srcId, et.dstId, et.attr._1))
-      .collect
-
-    restoreOrder(order)
-
+    val (order, weight) = algo.greedyGraphX(graph, samples)
     println("traverse order:")
     order.foreach(println)
 
-    val totalWeight = order.map(_._3).sum
-    println(s"total weight: $totalWeight")
+    println(s"total weight: $weight")
 
     logger.info(s"Sleep for 500000 millis")
     Thread.sleep(500000)

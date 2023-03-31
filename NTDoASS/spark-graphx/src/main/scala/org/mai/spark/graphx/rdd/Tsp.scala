@@ -2,6 +2,7 @@ package org.mai.spark.graphx.rdd
 
 import org.apache.spark.graphx.{Edge, EdgeTriplet, Graph, VertexId}
 import org.mai.spark.graphx.rdd.TspSolver.{UNUSED, tripletType}
+import scala.util.Random
 
 object TspSolver {
   private val UNUSED: Int = -1
@@ -28,11 +29,9 @@ class TspSolver (topCount: Int) {
 
       val sum = prefixSum.last
 
-//      println("prefixSum")
       prefixSum.foreach(println)
 
       val value = rand.nextDouble() * sum
-//      println(s"value = $value")
 
       val index = prefixSum.lastIndexWhere(x => value >= x)
       val result = items(index)
@@ -41,12 +40,61 @@ class TspSolver (topCount: Int) {
     }
   }
 
+  private def invertEdge(edge: (Long, Long, Double)) = {
+    (edge._2, edge._1, edge._3)
+  }
+
+  private def restoreOrderFirstTwo(order: Array[(Long, Long, Double)]): Unit = {
+    if (order(0)._2 == order(1)._2) {
+      order(1) = invertEdge(order(1))
+    }
+    else if (order(0)._1 == order(1)._1) {
+      order(0) = invertEdge(order(0))
+    }
+    else if (order(0)._1 == order(1)._2) {
+      order(0) = invertEdge(order(0))
+      order(1) = invertEdge(order(1))
+    }
+  }
+
+  private def restoreOrder(order: Array[(Long, Long, Double)]): Unit = {
+
+    restoreOrderFirstTwo(order)
+
+    for (i <- 1 until order.length) {
+      val prev = order(i - 1)
+      val cur = order(i)
+      if (prev._2 != cur._1) {
+        val newTup = (cur._2, cur._1, cur._3)
+        order(i) = newTup
+      }
+    }
+  }
+
   private def convertToAdjList(edges: List[LocalEdge]) = {
     val temp = edges.map(e => e.dst -> e) ++ edges.map(e => e.src -> e)
     temp.groupBy(e => e._1).mapValues(l => l.map(e => e._2))
   }
 
-  def greedyLocal(origin: Long, vertices: List[LocalVertex], edges: List[LocalEdge]) = {
+  def greedyLocal(vertices: List[LocalVertex], edges: List[LocalEdge], samples: Int) = {
+    val (temp, bestWeight) = Random
+      .shuffle(vertices)
+      .take(samples)
+      .map(o => {
+        val order = greedyLocalIteration(o.id, vertices, edges)
+        val sum = order.map(_.weight).sum
+
+        (order, sum)
+      })
+      .minBy(_._2)
+
+    val bestOrder = temp.map(t => (t.src, t.dst, t.weight)).toArray
+
+    restoreOrder(bestOrder)
+    (bestOrder.toList, bestWeight)
+  }
+
+  def greedyLocalIteration(origin: Long, vertices: List[LocalVertex], edges: List[LocalEdge]) = {
     val adj = convertToAdjList(edges)
 
     var edgesAreAvailable = false
@@ -89,7 +137,31 @@ class TspSolver (topCount: Int) {
     order.toList
   }
 
-  def greedyGraphX[VD](g: Graph[VD, Double], origin: VertexId): Graph[Boolean, (Double, Int, Int)] = {
+  def greedyGraphX[VD](g: Graph[VD, Double], samples: Int) = {
+    val (temp, bestWeight) = g
+      .vertices
+      .takeSample(true, samples, 0)
+      .map(o => greedyGraphXIteration(g, o._1)).map(g => {
+      val order = g
+        .triplets
+        .filter(_.attr._2 >= 0)
+        .sortBy(_.attr._2)
+        .map(et => (et.srcId, et.dstId, et.attr._1))
+
+      val sum = order
+        .map(_._3)
+        .sum
+
+      (order, sum)
+    }).minBy(_._2)
+
+    val bestOrder = temp.collect
+
+    restoreOrder(bestOrder)
+    (bestOrder.toList, bestWeight)
+  }
+
+  def greedyGraphXIteration[VD](g: Graph[VD, Double], origin: VertexId): Graph[Boolean, (Double, Int, Int)] = {
     var g2 = g
       .mapVertices((vid, _) => vid == origin)
       .mapTriplets(et => (et.attr, UNUSED, 0))
