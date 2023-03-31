@@ -1,9 +1,9 @@
 package org.mai.spark.graphx.rdd
 
 import org.apache.spark.graphx.{Edge, EdgeTriplet, Graph, VertexId}
-import org.mai.spark.graphx.rdd.Tsp.{UNUSED, tripletType}
+import org.mai.spark.graphx.rdd.TspSolver.{UNUSED, tripletType}
 
-object Tsp {
+object TspSolver {
   private val UNUSED: Int = -1
   private type tripletType = EdgeTriplet[Boolean, (Double, Int, Int)]
 }
@@ -11,8 +11,37 @@ object Tsp {
 case class LocalVertex(id: Long)
 case class LocalEdge(src: Long, dst: Long, weight: Double)
 
-trait Tsp {
-  def convertToAdjList(edges: List[LocalEdge]) = {
+class TspSolver (topCount: Int) {
+
+  val rand = new scala.util.Random
+
+  private def selectRandom[T](items: List[T], key: T => Double): Option[T] = {
+    if (items.isEmpty) {
+      Option.empty[T]
+    }
+    else if(items.size == 1){
+      Option(items.head)
+    }
+    else {
+      val values = items.map(key)
+      val prefixSum = values.scanLeft(0.0)(_ + _)
+
+      val sum = prefixSum.last
+
+//      println("prefixSum")
+      prefixSum.foreach(println)
+
+      val value = rand.nextDouble() * sum
+//      println(s"value = $value")
+
+      val index = prefixSum.lastIndexWhere(x => value >= x)
+      val result = items(index)
+
+      Option(result)
+    }
+  }
+
+  private def convertToAdjList(edges: List[LocalEdge]) = {
     val temp = edges.map(e => e.dst -> e) ++ edges.map(e => e.src -> e)
     temp.groupBy(e => e._1).mapValues(l => l.map(e => e._2))
   }
@@ -41,7 +70,9 @@ trait Tsp {
       edgesAreAvailable = availableEdges.nonEmpty
 
       if(edgesAreAvailable) {
-        val smallestEdge = availableEdges.minBy(e => e.weight)
+        val pretendents = availableEdges.sortBy(e => e.weight).take(topCount + 1)
+        val pivot = pretendents.last.weight
+        val smallestEdge = selectRandom[LocalEdge](pretendents, e => pivot - e.weight).get
 
         order += smallestEdge
 
@@ -85,12 +116,15 @@ trait Tsp {
 
       if (edgesAreAvailable) {
         // ищем среди еще неиспользованных ребер ребро с наименьшим весом
-        val smallestEdge = availableEdges
-          .min()(new Ordering[tripletType]() {
+        val pretendents = availableEdges
+          .top(topCount + 1)(new Ordering[tripletType]() {
             override def compare(a: tripletType, b: tripletType): Int = {
-              Ordering[Double].compare(a.attr._1, b.attr._1)
+              -Ordering[Double].compare(a.attr._1, b.attr._1)
             }
-          })
+          }).toList
+
+        val pivot = pretendents.last.attr._1
+        val smallestEdge = selectRandom[EdgeTriplet[Boolean, (Double, Int, Int)]](pretendents, e => pivot - e.attr._1).get
 
         // вычисляем id вершины, которая станет текущей на следующей итерации
         nextVertexId = if (smallestEdge.srcId == nextVertexId) smallestEdge.dstId else smallestEdge.srcId

@@ -13,12 +13,14 @@ object TspTest {
   private val filePath = "data/qa194.tsp"
   // private val filePath = "data/usa.tsp"
 
+  private val topCount = 2
+
   private[this] val logger = getLogger
 
   def main(args: Array[String]): Unit = {
     setLoggerLevel
-//    testGraphXTSP()
-    testLocalTSP()
+    testGraphXTSP()
+//    testLocalTSP()
   }
 
   private def readData(filePath: String): List[(Long, (Double, Double))] = {
@@ -151,16 +153,17 @@ object TspTest {
   private def testLocalTSP(): Unit = {
     val (vertices, edges) = generateLocalGraph2()
 
-    val algo = new Tsp {}
+    val algo = new TspSolver(topCount)
 
     val order = algo.greedyLocal(1L, vertices, edges).map(e => (e.src, e.dst, e.weight)).toArray
 
     restoreOrder(order)
-    val totalWeight = order.map(_._3).sum
 
-    println(s"total weight: $totalWeight")
     println("traverse order:")
     order.foreach(println)
+
+    val totalWeight = order.map(_._3).sum
+    println(s"total weight: $totalWeight")
   }
 
   private def testGraphXTSP(): Unit = {
@@ -171,7 +174,7 @@ object TspTest {
     val graph = generateGraph2(spark)
       .mapEdges(_.attr)
 
-    val algo = new Tsp {}
+    val algo = new TspSolver(topCount)
 
     println("start at 1")
 
@@ -180,11 +183,12 @@ object TspTest {
       .collect
 
     restoreOrder(order)
-    val totalWeight = order.map(_._3).sum
 
-    println(s"total weight: $totalWeight")
     println("traverse order:")
     order.foreach(println)
+
+    val totalWeight = order.map(_._3).sum
+    println(s"total weight: $totalWeight")
 
     logger.info(s"Sleep for 500000 millis")
     Thread.sleep(500000)
