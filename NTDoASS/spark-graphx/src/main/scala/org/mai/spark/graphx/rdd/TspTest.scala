@@ -13,14 +13,14 @@ object TspTest {
   private val filePath = "data/qa194.tsp"
   // private val filePath = "data/usa.tsp"
 
-  private val topCount = 2
+  private val topCount = 3
 
   private[this] val logger = getLogger
 
   def main(args: Array[String]): Unit = {
     setLoggerLevel
-    testGraphXTSP()
-//    testLocalTSP()
+//    testGraphXTSP()
+    testLocalTSP()
   }
 
   private def readData(filePath: String): List[(Long, (Double, Double))] = {

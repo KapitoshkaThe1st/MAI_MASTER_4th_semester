@@ -13,7 +13,7 @@ case class LocalEdge(src: Long, dst: Long, weight: Double)
 
 class TspSolver (topCount: Int) {
 
-  val rand = new scala.util.Random
+  val rand = new scala.util.Random(0)
 
   private def selectRandom[T](items: List[T], key: T => Double): Option[T] = {
     if (items.isEmpty) {
@@ -70,9 +70,8 @@ class TspSolver (topCount: Int) {
       edgesAreAvailable = availableEdges.nonEmpty
 
       if(edgesAreAvailable) {
-        val pretendents = availableEdges.sortBy(e => e.weight).take(topCount + 1)
-        val pivot = pretendents.last.weight
-        val smallestEdge = selectRandom[LocalEdge](pretendents, e => pivot - e.weight).get
+        val pretendents = availableEdges.sortBy(e => e.weight).take(topCount).reverse.zipWithIndex.map(t => (t._1, t._2 + 1))
+        val smallestEdge = selectRandom[(LocalEdge, Int)](pretendents, e => e._2 * e._2).get._1
 
         order += smallestEdge
 
@@ -121,10 +120,9 @@ class TspSolver (topCount: Int) {
             override def compare(a: tripletType, b: tripletType): Int = {
               -Ordering[Double].compare(a.attr._1, b.attr._1)
             }
-          }).toList
+          }).toList.reverse.zipWithIndex.map(t => (t._1, t._2 + 1)).map(t => (t._1, t._2 + 1))
 
-        val pivot = pretendents.last.attr._1
-        val smallestEdge = selectRandom[EdgeTriplet[Boolean, (Double, Int, Int)]](pretendents, e => pivot - e.attr._1).get
+        val smallestEdge = selectRandom[(EdgeTriplet[Boolean, (Double, Int, Int)], Int)](pretendents, e => e._2 * e._2).get._1
 
         // вычисляем id вершины, которая станет текущей на следующей итерации
         nextVertexId = if (smallestEdge.srcId == nextVertexId) smallestEdge.dstId else smallestEdge.srcId
