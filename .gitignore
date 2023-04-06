@@ -1,2 +1,5 @@
 /NTDoASS/spark-graphx/.idea
 /NTDoASS/spark-graphx/target
+/NTDoASS/neo4j/neo4j_docker
+/NTDoASS/neo4j/tsp/target
+/NTDoASS/neo4j/tsp/.idea
