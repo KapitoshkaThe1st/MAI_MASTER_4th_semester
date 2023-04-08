@@ -4,6 +4,8 @@ import org.apache.commons.lang3.tuple.ImmutablePair;
 import org.neo4j.graphdb.*;
 import org.neo4j.procedure.*;
 
+import java.io.PrintWriter;
+import java.io.StringWriter;
 import java.util.*;
 import java.util.function.ToDoubleFunction;
 import java.util.stream.Collectors;
@@ -21,6 +23,7 @@ public class Tsp {
         } else if (items.size() == 1) {
             return Optional.of(items.get(0));
         } else {
+//            var values = items.stream().mapToDouble(key);
             var values = items.stream().mapToDouble(key);
             var prefixSum = values
                     .collect(ArrayList<Double>::new, (sums, number) -> {
@@ -117,12 +120,15 @@ public class Tsp {
                 break;
             }
 
-            availableEdges.sort(Comparator.comparingDouble(e -> Utils.getDistance(e, relationshipPropertyName)));
+            availableEdges
+                .sort(
+                    Comparator.comparingDouble(e -> Utils.getDistance((Relationship) e, relationshipPropertyName))
+                );
 
             var pretendents = IntStream
                     .range(0, availableEdges.size())
-                    .mapToObj(i -> new ImmutablePair<>(i + 1, availableEdges.get(i)))
-                    .limit(topCount)
+                    .mapToObj(i -> new ImmutablePair<>((int)topCount - i, availableEdges.get(i)))
+                    .limit((int)topCount)
                     .toList();
 
             var smallestEdge = selectRandom(pretendents, e -> e.left * e.left, rand, sb).get().right;
@@ -199,8 +205,13 @@ public class Tsp {
             }
             return Stream.concat(results.stream(), Stream.of(new TspResult(sb.toString())));
         }
-        catch (Throwable ex) {
-            sb.append(ex.getMessage());
+        catch (Exception ex) {
+
+            StringWriter sw = new StringWriter();
+            PrintWriter pw = new PrintWriter(sw);
+            ex.printStackTrace(pw);
+
+            sb.append(String.format("%n%s%n", sw.toString()));
             return Stream.of(new TspResult(sb.toString()));
         }
     }
